@@ -58,6 +58,7 @@
    * ``--labels`` 标签列表，例如可打上 ``learner``，``evaluator`` 等标签，在主入口文件中就可以根据这些标签决定执行哪些中间件，默认为空。
    * ``--attach-to`` 连接的地址列表，例如 192.168.0.1:50515，可以为多个地址，用逗号分隔，默认为空。
    * ``--address`` 监听的地址，不包含端口，例如 192.168.0.1，默认为本机外网地址。
+   * ``--topology`` 拓扑网络形式，支持网格（mesh），星形（star）和无连接（alone）。
 
 接下来我们在另两台服务器上分别启动新的进程，并且让它们连接到第一台服务器上：
 
@@ -88,3 +89,45 @@
    $ xxx --workers 3 --gpus 2 --package path/to/my/package --main my_module.main --topology star
 
 这样就会按顺序给头部的 2 个 pod 挂载 gpu，并在 ``ditask`` 任务中增加 ``gpu`` 标签，在主入口文件中就可以根据标签来决定是否训练等等了。
+
+FAQ
+-------------------------------
+
+.. note ::
+
+   分布式训练默认以 k8s 为基建，所以以下提到机器均称为 ``pod``，如需独立部署将 ``pod`` 映射为物理机。
+
+**Q: parallel workers 大于 1 的情况下怎么配置？**
+
+当每个 pod 中启动多个进程时（``--parallel-workers`` 大于 1），会产生多个 node id 和监听多个 port，\
+如不指定 ``--node-ids``，``--ports``，将默认将 node ids 以 0, 1, 2... 编号，将 ports 以 50515, 50516... 编号，数量为 worker 数。\
+如需指定 node ids 和 ports，需保持与 worker 数一致。
+
+``--attach-to`` 仅需指定一次连接即可保持双向通讯，例如如果想将 node0 和 node1 连接起来，只需要在启动 node1 的时候加上 ``--attach-to node0_address:node0_port`` 即可。
+
+以下例子为三个 pod，每个 pod 两个 worker，全连接的部署命令：
+
+.. code-block:: shell
+
+   # Pod0 启动两个进程，互相连接（topology mesh）
+   $ ditask --package my_module --main my_module.main --parallel-workers 2 --protocol tcp --ports 50515,50516  --node-ids 0,1 --topology mesh
+   # Pod1 启动两个进程，互相连接，并且 attach 到 pod0 的两个进程
+   $ ditask --package my_module --main my_module.main --parallel-workers 2 --protocol tcp --ports 50515,50516  --node-ids 2,3 --topology mesh --attach-to pod0:50515,pod0:50516
+   # Pod2 启动两个进程，互相连接，并且 attach 到 pod0, pod1 的四个进程
+   $ ditask --package my_module --main my_module.main --parallel-workers 2 --protocol tcp --ports 50515,50516  --node-ids 4,5 --topology mesh --attach-to pod0:50515,pod0:50516,pod1:50515,pod2:50516
+
+以下例子为三个 pod，每个 pod 两个 worker，只连接到 node0 的部署命令：
+
+.. code-block:: shell
+
+   # Pod0 启动两个进程，星型连接
+   $ ditask --package my_module --main my_module.main --parallel-workers 2 --protocol tcp --ports 50515,50516  --node-ids 0,1 --topology star  # 见备注
+   # Pod1 启动两个进程，无连接，并且 attach 到 node0
+   $ ditask --package my_module --main my_module.main --parallel-workers 2 --protocol tcp --ports 50515,50516  --node-ids 2,3 --topology alone --attach-to pod0:50515
+   # Pod2 启动两个进程，无连接，并且 attach 到 node0
+   $ ditask --package my_module --main my_module.main --parallel-workers 2 --protocol tcp --ports 50515,50516  --node-ids 4,5 --topology alone --attach-to pod0:50515
+
+.. note ::
+
+   因为 pod0 两个进程是通过一个 ditask 命令产生的，所以无法通过 ``--attach-to`` 命令将 node1 连接到 node0，只能将它们指定为 star topology，让 node1 只与 node0 连接。
+   而其他 pod 则需指定 alone topology，因为它们本机上的多个进程不需要互相连接，而均需要 attach 到 node0。
