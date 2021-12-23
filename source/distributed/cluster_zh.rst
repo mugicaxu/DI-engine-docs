@@ -65,9 +65,9 @@
 .. code-block:: shell
 
    # 在服务器 1
-   $ ditask --package my_module --main my_module.main --parallel-workers 1 --protocol tcp --ports 50515  --node-ids 1 --attach-to 192.168.0.1:50515
+   $ ditask --package my_module --main my_module.main --parallel-workers 1 --protocol tcp --ports 50515  --node-ids 1 --attach-to tcp://192.168.0.1:50515
    # 在服务器 2
-   $ ditask --package my_module --main my_module.main --parallel-workers 1 --protocol tcp --ports 50515  --node-ids 2 --attach-to 192.168.0.1:50515
+   $ ditask --package my_module --main my_module.main --parallel-workers 1 --protocol tcp --ports 50515  --node-ids 2 --attach-to tcp://192.168.0.1:50515
 
 这样我们就得到了三台运行 ``main.py`` 的服务器，并且后面两台都能和第一台保持双向通讯。至于内部的训练逻辑，就和单机下的并行模式一样啦。参考 `分布式 <./index_zh.html>`_
 
